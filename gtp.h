@@ -2,6 +2,7 @@
 #include <Eigen/Dense>
 #include "spline.h"
 #include "config.cpp"
+#include "track.cpp"
 
 using namespace std;
 using namespace Eigen;
@@ -9,8 +10,12 @@ using namespace Eigen;
 class SE_IBR{
     public:
         SE_IBR(const Config& config){
+            // 
+
+
             this->config = config;
             this->dt = config.dt;
+            this->track = Track('track_centers.csv', 'track_tangent.csv', 'track_normals.csv');
             this->n_steps = config.n_steps;
             // init trajectory here
             this->i_ego = 0;
@@ -25,7 +30,7 @@ class SE_IBR{
 
         Config config;
         int dt;
-        // track
+        Track track;
         int n_steps;
         pair<MatrixXd, MatrixXd> traj;
         int i_ego;

@@ -20,12 +20,16 @@ class Track{
         void read_record();
 
         ArrayX2d track_centers;
-        ArrayX2d track_tangent;
-        ArrayX2d track_normals;
+        ArrayXd track_tangent;
+        ArrayXd track_normals;
 
         string track_centers_file;
         string track_tangent_file;
         string track_normals_file;
+
+        // must add operator for assignment operator
+
+        vector<double> nearest_trackpoint(ArrayXd& p);
 
 };
 
@@ -34,7 +38,7 @@ Track::Track(string a, string b, string c):
     track_tangent_file(b),
     track_normals_file(c)
 {
-    read_record();
+    read_record(); // only track_centers is read as of now
 };
 
 void Track::read_record() { 
@@ -67,6 +71,20 @@ void Track::read_record() {
 
     fin.close(); // Don't forget to close the file
 } 
+
+vector<double> Track::nearest_trackpoint(ArrayXd& p){
+    int i = ((track_centers - p.replicate(track_centers.rows(), 1)).square().rowwise().sum()).argmin();
+    vector<double> ans;
+
+    ans.push_back(i);
+    ans.push_back(track_centers(i, 0));
+    ans.push_back(track_centers(i, 1));
+    ans.push_back(track_tangent(i));
+    ans.push_back(track_normals(i));
+
+    return ans;
+}
+
 
 int main(){
     Track track("track_centers.csv", "b", "c");
