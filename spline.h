@@ -32,6 +32,7 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <Eigen/Dense>
 #ifdef HAVE_SSTREAM
 #include <sstream>
 #include <string>
@@ -60,7 +61,8 @@ public:
     enum spline_type {
         linear = 10,            // linear interpolation
         cspline = 30,           // cubic splines (classical C^2)
-        cspline_hermite = 31    // cubic hermite splines (local, only C^1)
+        cspline_hermite = 31,    // cubic hermite splines (local, only C^1)
+        cspline_periodic = 32
     };
 
     // boundary condition type for the spline end-points
@@ -108,8 +110,7 @@ public:
             this->make_monotonic();
         }
     }
-
-
+        
     // modify boundary conditions: if called it must be before set_points()
     void set_boundary(bd_type left, double left_value,
                       bd_type right, double right_value);
@@ -363,6 +364,35 @@ void spline::set_points(const std::vector<double>& x,
 
         // parameters c and d are determined by continuity and differentiability
         set_coeffs_from_b();
+
+    } else if(type == cspline_periodic){
+        // Adjust boundary conditions for periodic spline
+        m_left = second_deriv; // Use second derivative for both ends
+        m_right = second_deriv;
+        m_left_value = (2.0 * (m_y[1] - m_y[0]) / (x[1] - x[0])) -
+                       (2.0 * (m_y[n - 1] - m_y[n - 2]) / (x[n - 1] - x[n - 2]));
+        m_right_value = m_left_value;
+
+        // Set up the matrix and right-hand side of the equation system
+        internal::band_matrix A(n, 1, 1);
+        std::vector<double> rhs(n);
+        for (int i = 1; i < n - 1; i++) {
+            A(i, i - 1) = 1.0 / 3.0 * (x[i] - x[i - 1]);
+            A(i, i) = 2.0 / 3.0 * (x[i + 1] - x[i - 1]);
+            A(i, i + 1) = 1.0 / 3.0 * (x[i + 1] - x[i]);
+            rhs[i] = (y[i + 1] - y[i]) / (x[i + 1] - x[i]) - 
+                     (y[i] - y[i - 1]) / (x[i] - x[i - 1]);
+        }
+
+        // Additional equations for periodic boundary conditions
+        A(0, 0) = 2.0 / 3.0 * (x[1] - x[0]) + 2.0 / 3.0 * (x[n - 1] - x[n - 2]);
+        A(0, 1) = 1.0 / 3.0 * (x[1] - x[0]);
+        A(0, n - 1) = 1.0 / 3.0 * (x[n - 1] - x[n - 2]);
+        rhs[0] = (y[1] - y[0]) / (x[1] - x[0]) - 
+                 (y[0] - y[n - 2]) / (x[0] - x[n - 2]);
+
+        // Solve the equation system to obtain the parameters c[]
+        m_c = A.lu_solve(rhs);
 
     } else {
         assert(false);

@@ -129,6 +129,19 @@ test/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test.dir/build.make CMakeFiles/test.dir/build
 .PHONY : test/fast
 
+#=============================================================================
+# Target rules for targets named track
+
+# Build rule for target.
+track: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 track
+.PHONY : track
+
+# fast build rule for target.
+track/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/track.dir/build.make CMakeFiles/track.dir/build
+.PHONY : track/fast
+
 test.o: test.cpp.o
 .PHONY : test.o
 
@@ -153,6 +166,30 @@ test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test.dir/build.make CMakeFiles/test.dir/test.cpp.s
 .PHONY : test.cpp.s
 
+track.o: track.cpp.o
+.PHONY : track.o
+
+# target to build an object file
+track.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/track.dir/build.make CMakeFiles/track.dir/track.cpp.o
+.PHONY : track.cpp.o
+
+track.i: track.cpp.i
+.PHONY : track.i
+
+# target to preprocess a source file
+track.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/track.dir/build.make CMakeFiles/track.dir/track.cpp.i
+.PHONY : track.cpp.i
+
+track.s: track.cpp.s
+.PHONY : track.s
+
+# target to generate assembly for a file
+track.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/track.dir/build.make CMakeFiles/track.dir/track.cpp.s
+.PHONY : track.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -162,9 +199,13 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... test"
+	@echo "... track"
 	@echo "... test.o"
 	@echo "... test.i"
 	@echo "... test.s"
+	@echo "... track.o"
+	@echo "... track.i"
+	@echo "... track.s"
 .PHONY : help
 
 

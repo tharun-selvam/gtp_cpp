@@ -1,14 +1,15 @@
 #include <iostream>
 #include <Eigen/Dense>
+#include "spline.h"
 
-using Eigen::MatrixXd;
+using namespace std;
+using namespace Eigen;
 
-int main()
-{
-    MatrixXd m(2, 2);
-    m(0, 0) = 3;
-    m(1, 0) = 2.5;
-    m(0, 1) = -1;
-    m(1, 1) = m(1, 0) + m(0, 1);
-    std::cout << m(3) << std::endl;
+int main(){
+    int n_steps = 5;
+    ArrayX3d Ai(n_steps, 3);
+    // Ai = ArrayX3d::Zero();
+    // ArrayX3d Bi(n_steps, 3) = ArrayX3d::Zero();
+
+    cout << Ai << endl;
 }
