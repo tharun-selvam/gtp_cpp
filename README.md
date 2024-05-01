@@ -11,3 +11,5 @@
   1. It is assumed that the `track_centers`, `track_tangents` and `track_normals` are received as csv files.
   2. `track.cpp` reads the files and stores them in a `Track` instance as `Eigen` arrays.
   3. `gtp.cpp` uses this `Track` instance to do the rest.
+
+> Some important info: Use `Array` instead of `Matrix`
