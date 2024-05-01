@@ -1,4 +1,0 @@
-/Users/tharunselvam/Documents/gtp_cpp/CMakeFiles/test.dir
-/Users/tharunselvam/Documents/gtp_cpp/CMakeFiles/track.dir
-/Users/tharunselvam/Documents/gtp_cpp/CMakeFiles/edit_cache.dir
-/Users/tharunselvam/Documents/gtp_cpp/CMakeFiles/rebuild_cache.dir
