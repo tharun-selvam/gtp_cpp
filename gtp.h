@@ -3,6 +3,7 @@
 #include "spline.h"
 #include "config.cpp"
 #include "track.cpp"
+#include "PolyfitEigen.hpp"
 
 using namespace std;
 using namespace Eigen;
@@ -26,13 +27,13 @@ class SE_IBR{
 
         };
 
-        pair<MatrixXd, MatrixXd> init_traj(int i, ArrayXd& p_0);
+        pair<ArrayXd, ArrayXd> init_traj(int i, ArrayXd& p_0);
 
         Config config;
         int dt;
         Track track;
         int n_steps;
-        pair<MatrixXd, MatrixXd> traj;
+        pair<ArrayXd, ArrayXd> traj;
         int i_ego;
         float nc_weight;
         float nc_relax_weight;
@@ -40,7 +41,7 @@ class SE_IBR{
         float max_curvature;
 };
 
-pair<MatrixXd, MatrixXd> SE_IBR::init_traj(int i, ArrayXd& p_0){
+pair<ArrayXd, ArrayXd> SE_IBR::init_traj(int i, ArrayXd& p_0){
     // Initialize the trajectory at the start of the race.
     // Assuming that the 1st waypoint is the start point.
     // Simply a line following the tangent at the start point.
@@ -48,27 +49,34 @@ pair<MatrixXd, MatrixXd> SE_IBR::init_traj(int i, ArrayXd& p_0){
     // :param i: Index of the current track frame
     // :return: Initial trajectory
 
-    // Ai = np.zeros((self.n_steps, 3))
-    // Bi = np.zeros((self.n_steps, 3))
-    // for k in range(self.n_steps):
-    //     idx, c0, t0, n0 = self.track.nearest_trackpoint(p_0)
-    //     p_1 = p_0 + self.config.v_max * t0
-    //     _, c1, t1, n1 = self.track.nearest_trackpoint(p_1)
-    //     p_2 = p_1 + self.config.v_max * t1
-
-    //     # fit a quadratic to the line between the two points give two eqn for each x and y
-    //     eqn_x = np.polyfit([k, k+1, k+2], [p_0[0], p_1[0], p_2[0]], 2)
-    //     eqn_y = np.polyfit([k, k+1, k+2], [p_0[1], p_1[1], p_2[1]], 2)
-    //     # plt.show()
-    //     Ai[k, :] = [eqn_x[2], eqn_x[1], eqn_x[0]]
-    //     Bi[k, :] = [eqn_y[2], eqn_y[1], eqn_y[0]]
-    //     p_0 = p_1
-    // return (Ai, Bi)
-
     ArrayX3d Ai(n_steps, 3); // initialised to zero automatically
     ArrayX3d Bi(n_steps, 3);
 
     for(int k=0; k<n_steps; k++){
-        
+        vector<double> ans = track.nearest_trackpoint(p_0);
+        double t0 = ans[3];
+        ArrayXd p1 = p_0 + config.v_max * t0;
+        ans = track.nearest_trackpoint(p1);
+        double t1 = ans[3];
+        ArrayXd p2 = p1 + config.v_max * t1;
+
+        // fit a quadratic to the line between the two points give two eqn for each x and y
+        vector<double> x{k, k+1, k+2};
+        vector<double> y{p_0(0), p1(0), p2(0)};
+        vector<double> y1{p_0(1), p1(2), p2(3)};
+        vector<double> eqn_x = polyfit_Eigen(x, y, 2);
+        vector<double> eqn_y = polyfit_Eigen(x, y1, 2);
+
+        Ai(k, 0) = eqn_x[2];
+        Ai(k, 1) = eqn_x[1];
+        Ai(k, 2) = eqn_x[0];
+
+        Bi(k, 0) = eqn_y[2];
+        Bi(k, 1) = eqn_y[1];
+        Bi(k, 2) = eqn_y[0];
+
+        p_0 = p1;
+
+        return make_pair(Ai, Bi);
     }
 }
