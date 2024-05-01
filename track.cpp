@@ -73,16 +73,16 @@ void Track::read_record() {
 } 
 
 vector<double> Track::nearest_trackpoint(ArrayXd& p){
-    int i = ((track_centers - p.replicate(track_centers.rows(), 1)).square().rowwise().sum()).argmin();
-    vector<double> ans;
+    // int i = ((track_centers - p.replicate(track_centers.rows(), 1)).square().rowwise().sum()).argmin();
+    // vector<double> ans;
 
-    ans.push_back(i);
-    ans.push_back(track_centers(i, 0));
-    ans.push_back(track_centers(i, 1));
-    ans.push_back(track_tangent(i));
-    ans.push_back(track_normals(i));
+    // ans.push_back(i);
+    // ans.push_back(track_centers(i, 0));
+    // ans.push_back(track_centers(i, 1));
+    // ans.push_back(track_tangent(i));
+    // ans.push_back(track_normals(i));
 
-    return ans;
+    // return ans;
 }
 
 

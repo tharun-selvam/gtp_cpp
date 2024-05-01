@@ -142,6 +142,43 @@ track/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/track.dir/build.make CMakeFiles/track.dir/build
 .PHONY : track/fast
 
+#=============================================================================
+# Target rules for targets named optim
+
+# Build rule for target.
+optim: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 optim
+.PHONY : optim
+
+# fast build rule for target.
+optim/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optim.dir/build.make CMakeFiles/optim.dir/build
+.PHONY : optim/fast
+
+optim.o: optim.cpp.o
+.PHONY : optim.o
+
+# target to build an object file
+optim.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optim.dir/build.make CMakeFiles/optim.dir/optim.cpp.o
+.PHONY : optim.cpp.o
+
+optim.i: optim.cpp.i
+.PHONY : optim.i
+
+# target to preprocess a source file
+optim.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optim.dir/build.make CMakeFiles/optim.dir/optim.cpp.i
+.PHONY : optim.cpp.i
+
+optim.s: optim.cpp.s
+.PHONY : optim.s
+
+# target to generate assembly for a file
+optim.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/optim.dir/build.make CMakeFiles/optim.dir/optim.cpp.s
+.PHONY : optim.cpp.s
+
 test.o: test.cpp.o
 .PHONY : test.o
 
@@ -198,8 +235,12 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... optim"
 	@echo "... test"
 	@echo "... track"
+	@echo "... optim.o"
+	@echo "... optim.i"
+	@echo "... optim.s"
 	@echo "... test.o"
 	@echo "... test.i"
 	@echo "... test.s"
