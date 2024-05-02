@@ -201,7 +201,7 @@ ArrayX2d SE_IBR::best_response(int i, Array22d& state, vector<pair<ArrayXd, Arra
         acc_constraints.push_back(model.addConstr(c_A_sq + c_B_sq <= a_max));
     }
 
-    // track contraints
+    // track contraints(check one; mostly correct)
     std::vector<GRBConstr> track_constraints;
     GRBQuadExpr track_obj;
     double track_objective_exp = 0.5;
