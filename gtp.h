@@ -130,10 +130,11 @@ ArrayX2d SE_IBR::best_response(int i, Array22d& state, vector<pair<ArrayXd, Arra
     model.addConstr(strat_A[0][0] - p_i(0) == 0);
     model.addConstr(strat_B[0][0] - p_i(1) == 0);
 
-    // Add collision constraints
+    // Non-collision constraints (doubtful completely because of p_curr)
+    // ahould p_curr be a GRBContr?
     std::vector<GRBConstr> nc_constraints;
-    double nc_obj = 0.0;
-    double nc_relax_obj = 0.0;
+    GRBLinExpr nc_obj(0.0);
+    GRBLinExpr nc_relax_obj(0.0);
     double non_collision_objective_exp = 0.5; // exponentially decreasing weight
 
     for (int k = 0; k < n_steps; ++k) {
@@ -145,10 +146,10 @@ ArrayX2d SE_IBR::best_response(int i, Array22d& state, vector<pair<ArrayXd, Arra
         ArrayXd p_opp = ArrayXd::Zero(2);
 
         for (int j = 0; j < 3; ++j) {
-            p_ego(0) += A_ego(j) * k + B_ego(j) * pow(k, 2);
-            p_ego(1) += A_ego(j) * k + B_ego(j) * pow(k, 2);
-            p_opp(0) += A_opp(j) * k + B_opp(j) * pow(k, 2);
-            p_opp(1) += A_opp(j) * k + B_opp(j) * pow(k, 2);
+            p_ego(0) += A_ego(j) * pow(k, j);
+            p_ego(1) += B_ego(j) * pow(k, j);
+            p_opp(0) += A_opp(j) * pow(k, j);
+            p_opp(1) += B_opp(j) * pow(k, j);
         }
 
         ArrayXd beta = p_opp - p_ego;
@@ -156,17 +157,82 @@ ArrayX2d SE_IBR::best_response(int i, Array22d& state, vector<pair<ArrayXd, Arra
             beta /= beta.norm();
         }
 
+        // doubtful if we have to use .get(GRB_DoubleAttr_X)
         ArrayXd p_curr = ArrayXd::Zero(2);
         for (int j = 0; j < 3; ++j) {
-            p_curr(0) += strat_A[k][j].get(GRB_DoubleAttr_X) * k + strat_B[k][j].get(GRB_DoubleAttr_X) * pow(k, 2);
-            p_curr(1) += strat_A[k][j].get(GRB_DoubleAttr_X) * k + strat_B[k][j].get(GRB_DoubleAttr_X) * pow(k, 2);
+            p_curr(0) += strat_A[k][j].get(GRB_DoubleAttr_X) * pow(k, j);
+            p_curr(1) += strat_B[k][j].get(GRB_DoubleAttr_X) * pow(k, j);
         }
 
-        GRBConstr nc_constraint = model.addConstr(beta.dot(p_opp) - beta.transpose() * p_curr >= d_coll);
+        GRBConstr nc_constraint;
+        nc_constraint = model.addConstr(beta.dot(p_opp) - beta.transpose().matrix() * p_curr.matrix() >= d_coll);
         nc_constraints.push_back(nc_constraint);
 
-        nc_obj += pow(non_collision_objective_exp, k) * fmax(0.0, d_safe - (beta.dot(p_opp) - beta.transpose() * p_curr));
-        nc_relax_obj += pow(non_collision_objective_exp, k) * fmax(0.0, d_coll - (beta.dot(p_opp) - beta.transpose() * p_curr));
+        // doubtful of the below exppr
+        nc_obj += pow(non_collision_objective_exp, k) * fmax(0.0, d_safe - (beta.dot(p_opp) - beta.transpose().matrix() * p_curr.matrix()));
+        nc_relax_obj += pow(non_collision_objective_exp, k) * fmax(0.0, d_coll - (beta.dot(p_opp) - beta.transpose().matrix() * p_curr.matrix()));
+    }
+
+    // c_constraints
+    std::vector<GRBConstr> c_constraint;
+
+    for (int k = 0; k < n_steps; ++k) {
+        c_constraint.push_back(model.addConstr(strat_A[k][0] <= 100));
+        c_constraint.push_back(model.addConstr(strat_A[k][0] >= -100));
+        c_constraint.push_back(model.addConstr(strat_B[k][0] <= 100));
+        c_constraint.push_back(model.addConstr(strat_B[k][0] >= -100));
+    }
+
+    // velocity constraints
+    std::vector<GRBConstr> vel_constraints;
+
+    for (int k = 0; k < n_steps; ++k) {
+        GRBLinExpr vel_x = strat_A[k][1] + 2 * strat_A[k][2] * k;
+        GRBLinExpr vel_y = strat_B[k][1] + 2 * strat_B[k][2] * k;
+        vel_constraints.push_back(model.addConstr(vel_x * vel_x + vel_y * vel_y <= v_max * v_max));
+    }
+
+    // acceleration constraints
+    std::vector<GRBConstr> acc_constraints;
+
+    for (int k = 0; k < n_steps; ++k) {
+        GRBLinExpr c_A_sq = strat_A[k][2] * strat_A[k][2];
+        GRBLinExpr c_B_sq = strat_B[k][2] * strat_B[k][2];
+        acc_constraints.push_back(model.addConstr(c_A_sq + c_B_sq <= a_max));
+    }
+
+    // track contraints
+    std::vector<GRBConstr> track_constraints;
+    GRBQuadExpr track_obj;
+    double track_objective_exp = 0.5;
+
+    for (int k = 0; k < n_steps; ++k) {
+        ArrayXd A_ego = trajectories[i].first.row(k);
+        ArrayXd B_ego = trajectories[i].second.row(k);
+        ArrayXd p_cur(2);
+        p_cur << A_ego(0) + A_ego(1) * k + A_ego(2) * k * k,
+                B_ego(0) + B_ego(1) * k + B_ego(2) * k * k;
+
+        vector<double> track_info;
+        track_info = track.nearest_trackpoint(p_cur, track_info);
+        ArrayXd c = track_info.head(2);
+        ArrayXd t = track_info.segment(2, 2);
+        ArrayXd n = track_info.tail(2);
+
+        ArrayXd p_new(2);
+        p_new << strat_A[k][0] + strat_A[k][1] * k + strat_A[k][2] * k * k,
+                strat_B[k][0] + strat_B[k][1] * k + strat_B[k][2] * k * k;
+
+        GRBLinExpr track_constraint_1 = n.transpose() * p_new - n.transpose().matrix() * c.matrix();
+        GRBLinExpr track_constraint_2 = -track_constraint_1;
+
+        track_constraints.push_back(model.addConstr(track_constraint_1 <= width - config.collision_radius));
+        track_constraints.push_back(model.addConstr(track_constraint_2 <= width - config.collision_radius));
+
+        track_obj += pow(track_objective_exp, k) * (
+            GRBmax_(0.0, track_constraint_1 - (width - config.collision_radius)) +
+            GRBmax_(0.0, -track_constraint_2 - (width - config.collision_radius))
+        );
     }
 }
 
