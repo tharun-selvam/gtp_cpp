@@ -1,5 +1,6 @@
 #include <iostream>
 #include <Eigen/Dense>
+#include <gurobi_c++.h>
 #include "spline.h"
 #include "config.cpp"
 #include "track.cpp"
@@ -18,7 +19,7 @@ class SE_IBR{
             this->dt = config.dt;
             this->track = Track('track_centers.csv', 'track_tangent.csv', 'track_normals.csv');
             this->n_steps = config.n_steps;
-            // init trajectory here
+            this->traj = init_traj(0, track.waypoints.row(0))
             this->i_ego = 0;
             this->nc_weight = 1.0;
             this->nc_relax_weight = 128.0;
@@ -28,6 +29,7 @@ class SE_IBR{
         };
 
         pair<ArrayXd, ArrayXd> init_traj(int i, ArrayXd& p_0);
+        ArrayX2d best_response(int i, Array22d& state, vector<pair<ArrayXd, ArrayXd>> trajectories);
 
         Config config;
         int dt;
@@ -80,3 +82,91 @@ pair<ArrayXd, ArrayXd> SE_IBR::init_traj(int i, ArrayXd& p_0){
         return make_pair(Ai, Bi);
     }
 }
+
+
+ArrayX2d SE_IBR::best_response(int i, Array22d& state, vector<pair<ArrayXd, ArrayXd>> trajectories){
+
+    int j = (i + 1) % 2;
+    double v_max = this->config.v_max;
+    double a_max = this->config.a_max;
+    double d_coll = 2 * this->config.collision_radius;
+    double d_safe = 2 * this->config.collision_radius;
+    Array2d p_i = state.row(i);
+    Array2d p_j = state.row(j);
+    // ArrayXd traj_A = trajectories[i].first;
+    // ArrayXd traj_B = trajectories[i].second;
+    // ArrayXd traj_A_opp = trajectories[j].first;
+    // ArrayXd traj_B_opp = trajectories[j].second;
+    double width = this->config.track_width;
+
+
+    GRBEnv env = GRBEnv();
+    GRBModel model = GRBModel(env);
+
+    // Define decision variables
+    std::vector<std::vector<GRBVar>> strat_A(n_steps, std::vector<GRBVar>(3));
+    std::vector<std::vector<GRBVar>> strat_B(n_steps, std::vector<GRBVar>(3));
+    for (int k = 0; k < n_steps; ++k) {
+        for (int i = 0; i < 3; ++i) {
+            strat_A[k][i] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS);
+            strat_B[k][i] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS);
+        }
+    }
+
+    // Add continuity constraints
+    for (int k = 0; k < n_steps - 1; ++k) {
+        for (int i = 0; i < 3; ++i) {
+            model.addConstr(
+                strat_A[k][i] + strat_A[k][i+1] * (k + 1) + strat_A[k][i+2] * (k + 1) * (k + 1) -
+                (strat_A[k+1][i] + strat_A[k+1][i+1] * (k + 1) + strat_A[k+1][i+2] * (k + 1) * (k + 1)) == 0
+            );
+            model.addConstr(
+                strat_B[k][i] + strat_B[k][i+1] * (k + 1) + strat_B[k][i+2] * (k + 1) * (k + 1) -
+                (strat_B[k+1][i] + strat_B[k+1][i+1] * (k + 1) + strat_B[k+1][i+2] * (k + 1) * (k + 1)) == 0
+            );
+        }
+    }
+
+    model.addConstr(strat_A[0][0] - p_i(0) == 0);
+    model.addConstr(strat_B[0][0] - p_i(1) == 0);
+
+    // Add collision constraints
+    std::vector<GRBConstr> nc_constraints;
+    double nc_obj = 0.0;
+    double nc_relax_obj = 0.0;
+    double non_collision_objective_exp = 0.5; // exponentially decreasing weight
+
+    for (int k = 0; k < n_steps; ++k) {
+        ArrayXd A_opp = trajectories[j].first.row(k);
+        ArrayXd B_opp = trajectories[j].second.row(k);
+        ArrayXd A_ego = trajectories[i].first.row(k);
+        ArrayXd B_ego = trajectories[i].second.row(k);
+        ArrayXd p_ego = ArrayXd::Zero(2);
+        ArrayXd p_opp = ArrayXd::Zero(2);
+
+        for (int j = 0; j < 3; ++j) {
+            p_ego(0) += A_ego(j) * k + B_ego(j) * pow(k, 2);
+            p_ego(1) += A_ego(j) * k + B_ego(j) * pow(k, 2);
+            p_opp(0) += A_opp(j) * k + B_opp(j) * pow(k, 2);
+            p_opp(1) += A_opp(j) * k + B_opp(j) * pow(k, 2);
+        }
+
+        ArrayXd beta = p_opp - p_ego;
+        if (beta.norm() >= 1e-6) {
+            beta /= beta.norm();
+        }
+
+        ArrayXd p_curr = ArrayXd::Zero(2);
+        for (int j = 0; j < 3; ++j) {
+            p_curr(0) += strat_A[k][j].get(GRB_DoubleAttr_X) * k + strat_B[k][j].get(GRB_DoubleAttr_X) * pow(k, 2);
+            p_curr(1) += strat_A[k][j].get(GRB_DoubleAttr_X) * k + strat_B[k][j].get(GRB_DoubleAttr_X) * pow(k, 2);
+        }
+
+        GRBConstr nc_constraint = model.addConstr(beta.dot(p_opp) - beta.transpose() * p_curr >= d_coll);
+        nc_constraints.push_back(nc_constraint);
+
+        nc_obj += pow(non_collision_objective_exp, k) * fmax(0.0, d_safe - (beta.dot(p_opp) - beta.transpose() * p_curr));
+        nc_relax_obj += pow(non_collision_objective_exp, k) * fmax(0.0, d_coll - (beta.dot(p_opp) - beta.transpose() * p_curr));
+    }
+}
+
